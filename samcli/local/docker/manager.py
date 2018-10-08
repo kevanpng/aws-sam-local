@@ -43,24 +43,32 @@ class ContainerManager(object):
         :raises DockerImageNotFoundException: If the Docker image was not available in the server
         """
 
+        # TODO KEVAN CHANGE HERE. make a function that checks if a warm container exist. if so then use that container
+
+        # TODO KEVAN STOP HERE
+        # container is warm. run docker execute to see results
+        if container.id:
+            warm = True
         if warm:
-            raise ValueError("The facility to invoke warm container does not exist")
-
-        image_name = container.image
-
-        # Pull a new image if: a) Image is not available OR b) We are not asked to skip pulling the image
-        if not self.has_image(image_name) or not self.skip_pull_image:
-            self.pull_image(image_name)
+            # raise ValueError("The facility to invoke warm container does not exist")
+            # TODO KEVAN cannot have input data when starting exited container. this ability is depreciated
+            container.exec_run("/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
         else:
-            LOG.info("Requested to skip pulling images ...\n")
+            image_name = container.image
 
-        if not container.is_created():
-            # Create the container first before running.
-            # Create the container in appropriate Docker network
-            container.network_id = self.docker_network_id
-            container.create()
+            # Pull a new image if: a) Image is not available OR b) We are not asked to skip pulling the image
+            if not self.has_image(image_name) or not self.skip_pull_image:
+                self.pull_image(image_name)
+            else:
+                LOG.info("Requested to skip pulling images ...\n")
 
-        container.start(input_data=input_data)
+            if not container.is_created():
+                # Create the container first before running.
+                # Create the container in appropriate Docker network
+                container.network_id = self.docker_network_id
+                container.create()
+
+            container.start(input_data=input_data)
 
     def stop(self, container):
         """

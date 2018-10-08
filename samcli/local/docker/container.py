@@ -96,6 +96,9 @@ class Container(object):
                 }
             },
             # We are not running an interactive shell here.
+            # docker run -it lambci/lambda:build-python3.6 tail -f /dev/null
+            # THIS WILL WORK!
+
             "tty": False
         }
 
@@ -121,7 +124,10 @@ class Container(object):
             # Ex: 128m => 128MB
             kwargs["mem_limit"] = "{}m".format(self._memory_limit_mb)
 
-        real_container = self.docker_client.containers.create(self._image, **kwargs)
+        real_container = self.docker_client.containers.run(
+            self._image, name='sam-local-lambda', detach=True, **kwargs)
+        # real_container = self.docker_client.containers.create(
+        #     self._image, name='sam-local-lambda', **kwargs)
         self.id = real_container.id
 
         if self.network_id:

@@ -13,6 +13,8 @@ from contextlib import contextmanager
 from samcli.local.docker.lambda_container import LambdaContainer
 from .zip import unzip
 
+import docker
+
 LOG = logging.getLogger(__name__)
 
 
@@ -65,48 +67,79 @@ class LambdaRuntime(object):
         # Generate a dictionary of environment variable key:values
         env_vars = environ.resolve()
 
-        with self._get_code_dir(function_config.code_abs_path) as code_dir:
-            container = LambdaContainer(function_config.runtime,
-                                        function_config.handler,
-                                        code_dir,
-                                        memory_mb=function_config.memory,
-                                        env_vars=env_vars,
-                                        debug_options=debug_context)
+        # TODO KEVAN CHECK IF LAMBDA CONTAINER IS already created
+        docker_client = docker.from_env()
+        # using exited containers do not work. must find a way to keep the current process running.
+        # container_list = docker_client.containers.list(filters={"name":"sam-local-lambda", "status":"exited"})
+        container_list = docker_client.containers.list(filters={"name": "sam-local-lambda"})
+        if container_list:
+            container = container_list[0]
+        else:
+            with self._get_code_dir(function_config.code_abs_path) as code_dir:
+                container = LambdaContainer(function_config.runtime,
+                                            function_config.handler,
+                                            code_dir,
+                                            memory_mb=function_config.memory,
+                                            env_vars=env_vars,
+                                            debug_options=debug_context)
+        try:
 
-            try:
+            # Start the container. This call returns immediately after the container starts
+            # self._container_manager.run(container)
+            self._container_manager.run(container)
 
-                # Start the container. This call returns immediately after the container starts
-                self._container_manager.run(container)
+            # Setup appropriate interrupt - timeout or Ctrl+C - before function starts executing.
+            #
+            # Start the timer **after** container starts. Container startup takes several seconds, only after which,
+            # our Lambda function code will run. Starting the timer is a reasonable approximation that function has
+            # started running.
+            timer = self._configure_interrupt(function_config.name,
+                                              function_config.timeout,
+                                              container,
+                                              bool(debug_context))
 
-                # Setup appropriate interrupt - timeout or Ctrl+C - before function starts executing.
-                #
-                # Start the timer **after** container starts. Container startup takes several seconds, only after which,
-                # our Lambda function code will run. Starting the timer is a reasonable approximation that function has
-                # started running.
-                timer = self._configure_interrupt(function_config.name,
-                                                  function_config.timeout,
-                                                  container,
-                                                  bool(debug_context))
+            # NOTE: BLOCKING METHOD
+            # Block the thread waiting to fetch logs from the container. This method will return after container
+            # terminates, either successfully or killed by one of the interrupt handlers above.
+            # TODO KEVAN
+            # from here, do container.exec_run("/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
+            # THIS WILL WORK
+            # from samcli.local.docker.attach_api import attach
+            # it takes 3 secs for a new docker to create
+            # exec_run only takes 2 seconds to run!
+            exec_response = container.exec_run(
+                "/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
 
-                # NOTE: BLOCKING METHOD
-                # Block the thread waiting to fetch logs from the container. This method will return after container
-                # terminates, either successfully or killed by one of the interrupt handlers above.
-                container.wait_for_logs(stdout=stdout, stderr=stderr)
 
-            except KeyboardInterrupt:
-                # When user presses Ctrl+C, we receive a Keyboard Interrupt. This is especially very common when
-                # container is in debugging mode. We have special handling of Ctrl+C. So handle KeyboardInterrupt
-                # and swallow the exception. The ``finally`` block will also take care of cleaning it up.
-                LOG.debug("Ctrl+C was pressed. Aborting Lambda execution")
+            # container._write_container_output(
+            #     logs_itr, stdout=stdout, stderr=stderr)
 
-            finally:
-                # We will be done with execution, if either the execution completed or an interrupt was fired
-                # Any case, cleanup the timer and container.
-                #
-                # If we are in debugging mode, timer would not be created. So skip cleanup of the timer
-                if timer:
-                    timer.cancel()
-                self._container_manager.stop(container)
+            # import pprint as pp
+            # pp.pprint('exec_response is : {}'.format(exec_response))
+            # from remote_pdb import RemotePdb; RemotePdb("0.0.0.0", 5858).set_trace()
+            # import re
+            # response = re.search(
+            #     '\n\n({"statusCode".+?)$', exec_response.output.decode('utf-8')).group(1)
+            # import ast
+            # response = ast.literal_eval(response)
+            # return response
+            # container.wait_for_logs(stdout=stdout, stderr=stderr)
+
+        except KeyboardInterrupt:
+            # When user presses Ctrl+C, we receive a Keyboard Interrupt. This is especially very common when
+            # container is in debugging mode. We have special handling of Ctrl+C. So handle KeyboardInterrupt
+            # and swallow the exception. The ``finally`` block will also take care of cleaning it up.
+            LOG.debug("Ctrl+C was pressed. Aborting Lambda execution")
+
+        finally:
+            # We will be done with execution, if either the execution completed or an interrupt was fired
+            # Any case, cleanup the timer and container.
+            #
+            # If we are in debugging mode, timer would not be created. So skip cleanup of the timer
+            if timer:
+                timer.cancel()
+            # TODO KEVAN DONT STOP THE CONTAINER
+            # self._container_manager.stop(container)
 
     def _configure_interrupt(self, function_name, timeout, container, is_debugging):
         """
