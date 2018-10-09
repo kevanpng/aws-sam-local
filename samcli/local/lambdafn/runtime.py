@@ -63,6 +63,7 @@ class LambdaRuntime(object):
 
         # Update with event input
         environ = function_config.env_vars
+        # TODO KEVAN this is how event query_string_params is passed into the lanbda, through env vars
         environ.add_lambda_event_body(event)
         # Generate a dictionary of environment variable key:values
         env_vars = environ.resolve()
@@ -82,11 +83,11 @@ class LambdaRuntime(object):
                                             memory_mb=function_config.memory,
                                             env_vars=env_vars,
                                             debug_options=debug_context)
+                self._container_manager.run(container)
         try:
 
             # Start the container. This call returns immediately after the container starts
             # self._container_manager.run(container)
-            self._container_manager.run(container)
 
             # Setup appropriate interrupt - timeout or Ctrl+C - before function starts executing.
             #
@@ -108,9 +109,10 @@ class LambdaRuntime(object):
             # it takes 3 secs for a new docker to create
             # exec_run only takes 2 seconds to run!
             exec_response = container.exec_run(
-                "/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
-
-
+                "/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py",
+                environment=env_vars
+            )
+            stdout.write(exec_response.output)
             # container._write_container_output(
             #     logs_itr, stdout=stdout, stderr=stderr)
 
