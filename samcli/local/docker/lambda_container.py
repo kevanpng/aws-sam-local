@@ -268,25 +268,5 @@ class LambdaContainer(Container):
                    ]
 
         elif runtime == Runtime.python36.value:
-
-            # entrypoint = ["/var/lang/bin/python3.6"] \
-            #        + debug_args_list \
-            #        + [
-            #            "/var/runtime/awslambda/bootstrap.py"
-            #        ]
-
             entrypoint = 'sleep infinity'
-
-            # KEVAN NOTES IMPT
-            # using pure python implementation. do the following
-            # import docker
-            # client = docker.from_env()
-            # client.containers.run(image='lambci/lambda:python3.6', entrypoint='sleep infinity', detach=True)
-            # this makes the container long running.
-            # client.containers.list()
-            # this can list the container we want
-            # container.exec_run("/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
-            # this makes use execute the lambda properly
-            # after execution is good or bad, container returns to running state
-
         return entrypoint
