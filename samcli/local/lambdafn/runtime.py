@@ -68,7 +68,7 @@ class LambdaRuntime(object):
         env_vars = environ.resolve()
 
         docker_client = docker.from_env()
-        container_list = docker_client.containers.list(filters={"name": "sam-local-lambda"})
+        container_list = docker_client.containers.list(filters={'name': 'sam-local-lambda'})
         if container_list:
             container = container_list[0]
         else:
