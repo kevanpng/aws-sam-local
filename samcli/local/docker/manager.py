@@ -43,10 +43,8 @@ class ContainerManager(object):
         :raises DockerImageNotFoundException: If the Docker image was not available in the server
         """
 
-        # TODO KEVAN CHANGE HERE. make a function that checks if a warm container exist. if so then use that container
 
-        # TODO KEVAN STOP HERE
-        # container is warm. run docker execute to see results
+        # TODO KEVAN THIS may be why it does not run on the first time
         if container.id:
             warm = True
         if warm:

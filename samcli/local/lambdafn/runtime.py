@@ -63,15 +63,11 @@ class LambdaRuntime(object):
 
         # Update with event input
         environ = function_config.env_vars
-        # TODO KEVAN this is how event query_string_params is passed into the lanbda, through env vars
         environ.add_lambda_event_body(event)
         # Generate a dictionary of environment variable key:values
         env_vars = environ.resolve()
 
-        # TODO KEVAN CHECK IF LAMBDA CONTAINER IS already created
         docker_client = docker.from_env()
-        # using exited containers do not work. must find a way to keep the current process running.
-        # container_list = docker_client.containers.list(filters={"name":"sam-local-lambda", "status":"exited"})
         container_list = docker_client.containers.list(filters={"name": "sam-local-lambda"})
         if container_list:
             container = container_list[0]
@@ -102,30 +98,11 @@ class LambdaRuntime(object):
             # NOTE: BLOCKING METHOD
             # Block the thread waiting to fetch logs from the container. This method will return after container
             # terminates, either successfully or killed by one of the interrupt handlers above.
-            # TODO KEVAN
-            # from here, do container.exec_run("/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py")
-            # THIS WILL WORK
-            # from samcli.local.docker.attach_api import attach
-            # it takes 3 secs for a new docker to create
-            # exec_run only takes 2 seconds to run!
             exec_response = container.exec_run(
-                "/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py",
+                '/var/lang/bin/python3.6 /var/runtime/awslambda/bootstrap.py',
                 environment=env_vars
             )
             stdout.write(exec_response.output)
-            # container._write_container_output(
-            #     logs_itr, stdout=stdout, stderr=stderr)
-
-            # import pprint as pp
-            # pp.pprint('exec_response is : {}'.format(exec_response))
-            # from remote_pdb import RemotePdb; RemotePdb("0.0.0.0", 5858).set_trace()
-            # import re
-            # response = re.search(
-            #     '\n\n({"statusCode".+?)$', exec_response.output.decode('utf-8')).group(1)
-            # import ast
-            # response = ast.literal_eval(response)
-            # return response
-            # container.wait_for_logs(stdout=stdout, stderr=stderr)
 
         except KeyboardInterrupt:
             # When user presses Ctrl+C, we receive a Keyboard Interrupt. This is especially very common when
@@ -140,8 +117,6 @@ class LambdaRuntime(object):
             # If we are in debugging mode, timer would not be created. So skip cleanup of the timer
             if timer:
                 timer.cancel()
-            # TODO KEVAN DONT STOP THE CONTAINER
-            # self._container_manager.stop(container)
 
     def _configure_interrupt(self, function_name, timeout, container, is_debugging):
         """
